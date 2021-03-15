@@ -29,7 +29,7 @@
 // #define DY 0.1
 #define DX 2.2649e9/XDIM
 #define DY 2.2649e9/YDIM
-#define NT 50
+#define NT 500
 #define OUTPUT_INTERVAL 20 //time steps between file outputs
 
 #define EPSILON 0.1 //dynamic time stepping safety factor
@@ -67,6 +67,7 @@ Grid upwind_surface(const Grid &cell_center, const Grid &vel, const int index){
   int xdim = XDIM+1-index;
   int ydim = YDIM+index;
   Grid cell_surface = Grid::Zero(xdim,ydim);
+  #pragma omp parallel for collapse(2)
   for (int i = 0; i < xdim; i++){
     for(int j = 0; j < ydim; j++){
       //Handle direction of cell_center being considered (i.e. index for differencing)
@@ -188,6 +189,7 @@ Grid transport_derivative1D(const Grid &quantity, const Grid &vel, const int ind
   int ydim = quantity.cols();
   double denom = DX*(1-index) + DY*(index);
   Grid div = Grid::Ones(xdim,ydim);
+  #pragma omp parallel for collapse(2)
   for(int i=0; i<xdim; i++){
     for(int j=0; j<ydim; j++){
       int i0, i1, i2, i2surf, j0, j1, j2, j2surf; //Need separate indices for surface and vel
@@ -289,6 +291,7 @@ Grid derivative1D(const Grid &quantity, const int index){
   int ydim = quantity.cols();
   Grid div = Grid::Zero(xdim,ydim);
   double denom = 2.0*(DX*(1-index) + DY*(index));
+  #pragma omp parallel for collapse(2)
   for(int i=0; i<xdim; i++){
     for(int j=0; j<ydim; j++){
       int i0, i1, i2, j0, j1, j2;
@@ -385,6 +388,7 @@ Grid divergence(const Grid &quantity, const Grid &nontransp_x, const Grid &nontr
 //Enforce dynamic time stepping
 double recompute_dt(const Grid &press, const Grid &rho, const Grid &vx, const Grid &vy){
   double running_min_dt = std::numeric_limits<double>::max();
+  #pragma omp parallel for collapse(2)
   for(int i=0; i<XDIM; i++){
     for(int j=0; j<YDIM; j++){
       double c_s = std::sqrt(GAMMA*press(i,j)/rho(i,j));
@@ -400,6 +404,7 @@ double recompute_dt(const Grid &press, const Grid &rho, const Grid &vx, const Gr
 //Enforce dynamic time stepping for thermal conduction
 double recompute_dt_thermal(const Grid &rho, const Grid &temp){
   double running_min_dt = std::numeric_limits<double>::max();
+  #pragma omp parallel for collapse(2)
   for(int i=0; i<XDIM; i++){
     for(int j=0; j<YDIM; j++){
       double this_dt = K_B/KAPPA_0*(rho(i,j)/M_I)*DX*DY/std::pow(temp(i,j),2.5);
@@ -412,6 +417,7 @@ double recompute_dt_thermal(const Grid &rho, const Grid &temp){
 //Enforce minimum dynamic time step for radiation
 double recompute_dt_radiative(const Grid &energy, const Grid &rad_loss_rate){
   double running_min_dt = std::numeric_limits<double>::max();
+  #pragma omp parallel for collapse(2)
   for(int i=0; i<XDIM; i++){
     for(int j=0; j<YDIM; j++){
       if(rad_loss_rate(i,j) > 0.0){
@@ -488,6 +494,7 @@ Grid second_derivative1D(const Grid &quantity, const int index){
   int ydim = quantity.cols();
   Grid div = Grid::Zero(xdim,ydim);
   double denom = std::pow((DX*(1-index) + DY*(index)),2.0);
+  #pragma omp parallel for collapse(2)
   for(int i=0; i<xdim; i++){
     for(int j=0; j<ydim; j++){
       int i0, i1, i2, j0, j1, j2;
@@ -583,6 +590,7 @@ Grid conductive_flux(const Grid &temp, const double k0, const int index){
   int xdim = temp.rows();
   int ydim = temp.cols();
   Grid flux = Grid::Zero(xdim,ydim);
+  #pragma omp parallel for collapse(2)
   for(int i=0; i<xdim; i++){
     for(int j=0; j<ydim; j++){
       flux(i,j) = std::pow(temp(i,j),7.0/2.0);
@@ -593,6 +601,7 @@ Grid conductive_flux(const Grid &temp, const double k0, const int index){
 
 Grid radiative_losses(const Grid &rho, const Grid &temp, const int xdim, const int ydim){
   Grid result = Grid::Zero(xdim,ydim);
+  #pragma omp parallel for collapse(2)
   for(int i=0; i<xdim; i++){
     for(int j=0; j<ydim; j++){
       if(temp(i,j) < TEMP_CHROMOSPHERE){
@@ -859,7 +868,7 @@ int main(int argc,char* argv[]){
 
     t = t + dt;
     // if(iter%10 == 0){
-      printf("\rIter: %i/%i|dt: %f|Cond. Subcyc: %i|Rad. Subcyc: %i\n", iter, NT,dt,subcycles_conduct,subcycles_radiate);
+      // printf("\rIter: %i/%i|dt: %f|Cond. Subcyc: %i|Rad. Subcyc: %i\n", iter, NT,dt,subcycles_conduct,subcycles_radiate);
       // fflush(stdout);
     // }
 
